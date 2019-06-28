@@ -1,0 +1,33 @@
+{
+  "name": "uberflip-upload-form",
+  "version": "1.0.0",
+  "description": "Create a single interface to upload PDF documents to Uberflip",
+  "main": "index.js",
+  "scripts": {
+    "start": "index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vawdreyjack/uberflip-upload-form.git"
+  },
+  "keywords": [
+    "uberflip"
+  ],
+  "author": "Jack Vawdrey",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vawdreyjack/uberflip-upload-form/issues"
+  },
+  "homepage": "https://github.com/vawdreyjack/uberflip-upload-form#readme",
+  "dependencies": {
+    "body-parser": "^1.19.0",
+    "ejs": "^2.6.2",
+    "express": "^4.17.1",
+    "path": "^0.12.7",
+    "request": "^2.88.0"
+  },
+  "devDependencies": {
+    "gulp": "^4.0.2"
+  }
+}

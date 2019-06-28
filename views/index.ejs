@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            input {
+                width:100%;
+                height:30px;
+                font-size:20px;
+            }
+        </style>
+
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.2/jquery.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.12/jquery-ui.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="js/tag-it.min.js" type="text/javascript" charset="utf-8"></script>
+
+        <link rel="stylesheet" type="text/css" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1/themes/flick/jquery-ui.css">
+        <link href="css/jquery.tagit.css" rel="stylesheet" type="text/css">
+        <link rel="stylesheet" href="https://unpkg.com/purecss@1.0.0/build/pure-min.css" integrity="sha384-nn4HPE8lTHyVtfCBi5yW9d20FjT8BJwUXyWZT9InLYax14RDjBj46LmSztkmNP9w" crossorigin="anonymous">
+    
+        <style>
+            fieldset { 
+                padding: 20px;
+                margin:20px;
+            }
+
+            legend {
+                font-size:20px;
+            }
+
+            .container {
+                width:100%;
+                text-align:center;
+            }
+
+            .child {
+                width:50%; 
+                margin:auto;
+                text-align: left;
+                min-width:400px;
+                max-width:800px;
+            }
+
+            input[type="file"] {
+                font-size: 15px;
+            }
+
+            #copy {
+                resize: vertical;
+            }
+
+            label {
+                display: block;
+                padding-left: 15px;
+                text-indent: -15px;
+            }
+            input[type="checkbox"] {
+                width: 13px;
+                height: 13px;
+                padding: 0;
+                margin:0;
+                vertical-align: bottom;
+                position: relative;
+                top: -1px;
+                *overflow: hidden;
+            }
+        </style>
+    
+    </head>
+
+    <body>
+        <div class="container">
+        <h1>Uberflip Content Upload Form</h1>
+            <div class="child"> 
+                <form class="pure-form-stacked">
+                    <fieldset>
+                        <legend>Content Info</legend>
+                        <label for="title">Title</label><input id="title" type="text" placeholder="Analytics Monitoring: How to Ensure...">
+                        <label for="copy">Landing page copy</label><input id="copy" type="text">
+                        <label for="slug">Slug</label><input id="slug" type="text"> <!--Make sure to add regex validation for the slug-->
+                        <label for="content-category">Category</label>
+                        <select>
+
+                        </select>
+                    </fieldset>        
+                    <fieldset>
+                        <legend>Upload</legend>
+                        <label for="upload-pdf">Browse PDF</label><input type="file" id="upload-pdf">
+                        <label for="upload-thumb">Browse Thumbnail Image</label><input type="file" id="upload-thumb">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Meta Information</legend>
+                        <label for="author">Author</label>
+                        <select id="author">
+                            <% authors.forEach( author => {%>
+                            <option author-id="<%= author.id %>"><%= author.first_name + " " + author.last_name %> </option>
+                            <%}); %>
+                        </select>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Tags</legend>
+                        <ul id="tags"></ul>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Streams</legend>
+                            <% streams.forEach( stream => {%>
+                            <label for="<%= stream.id %>" class="pure-checkbox">
+                                <input type="checkbox" id="<%= stream.id %>" value="<%= stream.title %>"><%= stream.title %>
+                            </label>
+                            <%}); %>
+                        </select>
+                    </fieldset>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            $(document).ready(function() {
+                $("#tags").tagit({
+                    autocomplete: {
+                        source: <%- JSON.stringify(locals.contentTags) %>
+                    },
+                    allowSpaces: true
+                });
+            });
+        </script>
+
+    </body>
+</html>
