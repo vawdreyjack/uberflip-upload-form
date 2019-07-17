@@ -19,11 +19,14 @@ app.use(bodyParser.urlencoded({ extended: false }))
 //app.use(bodyParser.json())
 
 app.get("/", (req, res) => {
+
+    //Functions to grab the API Credentials/create promise that requests a token for the new API
     var legacyApiKey, legacySig;
     [legacyApiKey, legacySig] = getLegacyCreds();
     var pToken = getTokenPromise();
 
     pToken.then((token) => {
+        //Gets information to use for rendering the template
         var hubs = apiRequest('https://v2.api.uberflip.com/hubs', [], "GET", token, 'application/json');
         var authors = apiRequest('https://v2.api.uberflip.com/users', ["limit=100", "sort=last_name"], "GET", token, 'application/json');
         var tags = apiRequest('https://v2.api.uberflip.com/tags', ["limit=100"], "GET", token, 'application/json');
@@ -31,6 +34,7 @@ app.get("/", (req, res) => {
         var marketingStreams = apiRequest('https://v2.api.uberflip.com/streams', ["limit=100", "type=custom"], "GET", token, 'application/json');
         var folders = apiRequest('https://api.uberflip.com/', ["Version=0.1", "Method=GetTitles", "APIKey=" + legacyApiKey, "Signature=" + legacySig, "SortBy=-title"], "GET", "", 'application/json');
 
+        //Once all calls complete, render the form page
         Promise.all([hubs, authors, tags, docStreams, marketingStreams, folders]).then( values => {
             app.locals.contentTags = values[2].data.map(function (tag) {
                 return tag.name;
@@ -41,6 +45,7 @@ app.get("/", (req, res) => {
     });
 });
 
+//When form is submitted by the user.
 app.post("/form-submit", (req, res) => {
     var legacyApiKey, legacySig;
     var pathPdf, pathThumb, params;
@@ -60,8 +65,10 @@ app.post("/form-submit", (req, res) => {
         let {hubId, title, slug, author, category, docStream, copy, metaDes, tags} = formFields;
         //console.log(title, slug, author, category, docStream, copy, metaDes, tags);
         pathPdf = files["upload-pdf"].path;
-        pathThumb = files["upload-thumb"].path;
+        pathThumb = files["upload-thumb"].path; //Haven't yet implemented a way to get the thumbnail image into Uberflip
         params = ["Version=0.1", "Method=UploadFile", "APIKey=" + legacyApiKey, "Signature=" + legacySig, "TitleId=" + category, "IssueName=" + title, "ResponseType=JSON", "File=" + pathPdf];
+
+        //Request that uploads the file through the legacy api
         fileUpload = apiRequest('https://api.uberflip.com/', params, "POST", "", "multipart/form-data", {}, pathPdf);
 
          fileUpload.then(value => {
@@ -78,11 +85,13 @@ app.post("/form-submit", (req, res) => {
     });
 });
 
+//Calls a new user interface where users check to see if the file has successfully uploaded (since the APIs don't communicate with each other so well)
 app.get("/waiting", (req, res) => {
     app.locals.query = req.query;
     res.render("waiting", {data: req.query});
 });
 
+//The final action to update the asset within its stream.
 app.post("/update", (req, res) => {
     var pToken = getTokenPromise();
     var token;
@@ -112,6 +121,7 @@ app.post("/update", (req, res) => {
         }
     };
 
+    /* UNABLE TO SUCCESSFULLY PATCH IN THE UPDATED VALUES TO THE ASSET. RECEIVING AN "INVALID JSON INPUT ERROR. SEE LINE 133*/
     pToken.then(value => {
         token = value;
         //Get most recent asset (and its id) from the doc stream
