@@ -1,7 +1,7 @@
 # uberflip-upload-form
 Creating a single interface for Uberflip users to upload their content to their Hub, with options like tags, streams, and all other requirements.
 
-##Authentication
+## Authentication
 You will need to to create a keys.js file in app's root folder to include your credentials for both Uberflip's APIs. The file should contain the following:
 
 ```javascript
