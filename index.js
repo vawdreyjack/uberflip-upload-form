@@ -158,7 +158,7 @@ function apiRequest(endpoint, params, method, token, type, formData, filePath, c
             'formData': formData
         }
         //console.log(requestURL);
-        console.log(formData);
+        //console.log(formData);
         request(options, function callback(err, httpResponse, body) {
            //console.log(body);
             resolve(JSON.parse(body));
