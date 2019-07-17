@@ -54,3 +54,8 @@ textarea {
 label {
     margin-top: 20px;
 }
+
+.form-alert {
+    color: #ff0000;
+    display:none;
+}

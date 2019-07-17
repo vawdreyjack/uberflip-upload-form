@@ -4,6 +4,9 @@ let path = require('path');
 let bodyParser = require('body-parser');
 let request = require("request");
 let formidable = require('formidable');
+let fs = require('fs');
+let url = require('url');
+let keys = require('./keys.js');
 
 //app.use(bodyParser.urlencoded({ extended: true }));
 app.set("view engine", "ejs");
@@ -15,53 +18,131 @@ app.use(bodyParser.urlencoded({ extended: false }))
 // parse application/json
 //app.use(bodyParser.json())
 
-
 app.get("/", (req, res) => {
-    var token;
-    //Get access token
-    var pToken = new Promise((resolve, reject) => {
-        var clientId = "b59a65c860a90e2ca5eb8efe63b84bd5";
-        var clientSecret = "20d75e0559566990e6d61e0dc23c9689dbb9a297";
-        var requestURL = 'https://v2.api.uberflip.com/authorize?grant_type=client_credentials&client_id=' + clientId + '&client_secret=' + clientSecret;
-        request.post({url: requestURL}, function callback(err, httpResponse, body) {
-            resolve(JSON.parse(body).access_token);
-        });
-    });
+    var legacyApiKey, legacySig;
+    [legacyApiKey, legacySig] = getLegacyCreds();
+    var pToken = getTokenPromise();
 
-    pToken.then((value) => {
-        token = value;
-        
-        var authors = apiRequest('https://v2.api.uberflip.com/users', ["limit=100", "sort=last_name"], "GET", token);
-        var tags = apiRequest('https://v2.api.uberflip.com/tags', ["limit=100"], "GET", token);
-        var streams = apiRequest('https://v2.api.uberflip.com/streams', ["limit=100", "type=custom"], "GET", token);
+    pToken.then((token) => {
+        var hubs = apiRequest('https://v2.api.uberflip.com/hubs', [], "GET", token, 'application/json');
+        var authors = apiRequest('https://v2.api.uberflip.com/users', ["limit=100", "sort=last_name"], "GET", token, 'application/json');
+        var tags = apiRequest('https://v2.api.uberflip.com/tags', ["limit=100"], "GET", token, 'application/json');
+        var docStreams = apiRequest('https://v2.api.uberflip.com/streams', ["limit=100", "type=docs"], "GET", token, 'application/json');
+        var marketingStreams = apiRequest('https://v2.api.uberflip.com/streams', ["limit=100", "type=custom"], "GET", token, 'application/json');
+        var folders = apiRequest('https://api.uberflip.com/', ["Version=0.1", "Method=GetTitles", "APIKey=" + legacyApiKey, "Signature=" + legacySig, "SortBy=-title"], "GET", "", 'application/json');
 
-        Promise.all([authors, tags, streams]).then( values => {
-            app.locals.contentTags = values[1].data.map(function (tag) {
+        Promise.all([hubs, authors, tags, docStreams, marketingStreams, folders]).then( values => {
+            app.locals.contentTags = values[2].data.map(function (tag) {
                 return tag.name;
             });
-            res.render("index", {authors: values[0].data, streams: values[2].data});
+            values[5].pop(); //Get rid of the extra metadata in the Folders data
+            res.render("index", {hubs: values[0].data, authors: values[1].data, docStreams: values[3].data, marketingStreams: values[4].data, categories: values[5]});
         });
     });
 });
 
 app.post("/form-submit", (req, res) => {
-    var attempts = 0;
-    //console.log(req.body);
-    new formidable.IncomingForm().parse(req, (err, fields, files) => {
+    var legacyApiKey, legacySig;
+    var pathPdf, pathThumb, params;
+    var formFields;
+    var fileUpload; 
+    [legacyApiKey, legacySig] = getLegacyCreds();
+
+    var form = new formidable.IncomingForm();
+    form.parse(req, (err, fields, files) => {
         if (err) {
             console.error('Error', err);
             throw err;
         }
         console.log("Fields", fields);
-        console.log("Files", files);
-        console.log(files["upload-thumb"]);
+        //console.log("PDF", files["upload-pdf"]);
+        formFields = fields;
+        let {hubId, title, slug, author, category, docStream, copy, metaDes, tags} = formFields;
+        //console.log(title, slug, author, category, docStream, copy, metaDes, tags);
+        pathPdf = files["upload-pdf"].path;
+        pathThumb = files["upload-thumb"].path;
+        params = ["Version=0.1", "Method=UploadFile", "APIKey=" + legacyApiKey, "Signature=" + legacySig, "TitleId=" + category, "IssueName=" + title, "ResponseType=JSON", "File=" + pathPdf];
+        fileUpload = apiRequest('https://api.uberflip.com/', params, "POST", "", "multipart/form-data", {}, pathPdf);
+
+         fileUpload.then(value => {
+            if (value["Error"]) {
+                res.send(value["Error"].Description);
+            } else {
+                console.log("Upload response \n",value);
+                res.redirect(url.format({
+                    pathname:"/waiting",
+                    query: formFields
+                }));
+            }
+        });
     });
+});
+
+app.get("/waiting", (req, res) => {
+    app.locals.query = req.query;
+    res.render("waiting", {data: req.query});
+});
+
+app.post("/update", (req, res) => {
+    var pToken = getTokenPromise();
+    var token;
+    var {hub, title, slug, author, category, docStream, copy, metaDes, tags} = req.body;
+
+    var payload = {
+        title: null,
+        description: metaDes,
+        seo_title: null,
+        seo_description: null,
+        thumbnail_url: null,
+        canonical_url: null,
+        published_at: null,
+        hidden: false,
+        type: null,
+        content: {
+            draft: copy
+        },
+        author: {
+            id: parseInt(author)
+        },
+        custom_code: {
+            html: null,
+            css: null,
+            js: null,
+            active: null
+        }
+    };
+
+    pToken.then(value => {
+        token = value;
+        //Get most recent asset (and its id) from the doc stream
+        return apiRequest(`https://v2.api.uberflip.com/streams/${docStream}/items`, ['sort=-created_at', 'limit=1'], 'GET', token, 'application/json');
+    }).then( value => {
+        console.log(value);
+        var id = value.data[0].id;
+        //console.log(payload);
+        return apiRequest(`https://v2.api.uberflip.com/items/${id}`, [], 'PATCH', token, 'application/json', JSON.stringify(payload));
+    }).then( value => {
+        console.log(value);
+        res.send("Updated");
+    });
+
+    //Update Slug
+    //Update tags
+    //Include in other marketing streams
+    //Add gate
+    //Add thumbnail
+    
 });
 
 app.listen(3000, () => { console.log("I am listening") });
 
-function apiRequest(endpoint, params, method, token, callback) {
+//---------------------------------------------------------
+
+function apiRequest(endpoint, params, method, token, type, formData, filePath, callback) {
     return new Promise((resolve, reject) => {
+        if (filePath) {
+            formData['File'] = fs.createReadStream(filePath);
+        }
         var pms = "?";
         params.forEach( param => {
             pms = pms + param + "&";
@@ -73,10 +154,35 @@ function apiRequest(endpoint, params, method, token, callback) {
             'headers': {
                 Authorization: 'Bearer ' + token
             },
-            'contentType': 'application/json'
+            'contentType': type,
+            'formData': formData
         }
+        //console.log(requestURL);
+        console.log(formData);
         request(options, function callback(err, httpResponse, body) {
+           //console.log(body);
             resolve(JSON.parse(body));
         });
     })
+}
+
+//---------------------------------------------------------
+
+function getTokenPromise() {
+    var clientId = keys.CLIENT_ID;
+    var clientSecret = keys.CLIENT_SECRET;
+    return new Promise((resolve, reject) => {
+        var requestURL = 'https://v2.api.uberflip.com/authorize?grant_type=client_credentials&client_id=' + clientId + '&client_secret=' + clientSecret;
+        request.post({url: requestURL}, function callback(err, httpResponse, body) {
+            resolve(JSON.parse(body).access_token);
+        });
+    });
+}
+
+//---------------------------------------------------------
+
+function getLegacyCreds() {
+    var legacyApiKey = keys.LEGACY_KEY;
+    var legacySig = keys.LEGACY_SIG;
+    return [legacyApiKey, legacySig];
 }
