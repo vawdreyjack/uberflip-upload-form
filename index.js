@@ -7,10 +7,14 @@ let formidable = require('formidable');
 let fs = require('fs');
 let url = require('url');
 let keys = require('./keys.js');
+//let morgan = require('morgan');
+let logHTTP = require('log-that-http');
+
 
 //app.use(bodyParser.urlencoded({ extended: true }));
 app.set("view engine", "ejs");
 app.use(express.static('public'));
+//app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
 
 // parse application/x-www-form-urlencoded
 app.use(bodyParser.urlencoded({ extended: false }))
@@ -27,12 +31,13 @@ app.get("/", (req, res) => {
 
     pToken.then((token) => {
         //Gets information to use for rendering the template
-        var hubs = apiRequest('https://v2.api.uberflip.com/hubs', [], "GET", token, 'application/json');
-        var authors = apiRequest('https://v2.api.uberflip.com/users', ["limit=100", "sort=last_name"], "GET", token, 'application/json');
-        var tags = apiRequest('https://v2.api.uberflip.com/tags', ["limit=100"], "GET", token, 'application/json');
-        var docStreams = apiRequest('https://v2.api.uberflip.com/streams', ["limit=100", "type=docs"], "GET", token, 'application/json');
-        var marketingStreams = apiRequest('https://v2.api.uberflip.com/streams', ["limit=100", "type=custom"], "GET", token, 'application/json');
-        var folders = apiRequest('https://api.uberflip.com/', ["Version=0.1", "Method=GetTitles", "APIKey=" + legacyApiKey, "Signature=" + legacySig, "SortBy=-title"], "GET", "", 'application/json');
+        var hubs = apiRequest('https://v2.api.uberflip.com/hubs', {}, "GET", token, 'application/json');
+        var authors = apiRequest('https://v2.api.uberflip.com/users', {limit : 100, sort: 'last_name'}, "GET", token, 'application/json');
+        var tags = apiRequest('https://v2.api.uberflip.com/tags', {limit : 100}, "GET", token, 'application/json');
+        var docStreams = apiRequest('https://v2.api.uberflip.com/streams', {limit : 100, type: 'docs'}, "GET", token, 'application/json');
+        var marketingStreams = apiRequest('https://v2.api.uberflip.com/streams', {limit : 100, type: 'custom'}, "GET", token, 'application/json');
+        //var folders = apiRequest('https://api.uberflip.com/', ["Version=0.1", "Method=GetTitles", "APIKey=" + legacyApiKey, "Signature=" + legacySig, "SortBy=-title"], "GET", "", 'application/json');
+        var folders = apiRequest('https://api.uberflip.com/', {Version: '0.1', Method : 'GetTitles', APIKey : legacyApiKey, Signature : legacySig, SortBy : '-title'}, "GET", "", 'application/json');
 
         //Once all calls complete, render the form page
         Promise.all([hubs, authors, tags, docStreams, marketingStreams, folders]).then( values => {
@@ -59,15 +64,15 @@ app.post("/form-submit", (req, res) => {
             console.error('Error', err);
             throw err;
         }
-        console.log("Fields", fields);
+        //console.log("Fields", fields);
         //console.log("PDF", files["upload-pdf"]);
         formFields = fields;
         let {hubId, title, slug, author, category, docStream, copy, metaDes, tags} = formFields;
         //console.log(title, slug, author, category, docStream, copy, metaDes, tags);
         pathPdf = files["upload-pdf"].path;
         pathThumb = files["upload-thumb"].path; //Haven't yet implemented a way to get the thumbnail image into Uberflip
-        params = ["Version=0.1", "Method=UploadFile", "APIKey=" + legacyApiKey, "Signature=" + legacySig, "TitleId=" + category, "IssueName=" + title, "ResponseType=JSON", "File=" + pathPdf];
-
+        //params = ["Version=0.1", "Method=UploadFile", "APIKey=" + legacyApiKey, "Signature=" + legacySig, "TitleId=" + category, "IssueName=" + title, "ResponseType=JSON", "File=" + pathPdf];
+        params = {Version: '0.1', Method : 'UploadFile', APIKey : legacyApiKey, Signature : legacySig, TitleId : category, IssueName: title, ResponseType : 'JSON', File : pathPdf};
         //Request that uploads the file through the legacy api
         fileUpload = apiRequest('https://api.uberflip.com/', params, "POST", "", "multipart/form-data", {}, pathPdf);
 
@@ -120,17 +125,21 @@ app.post("/update", (req, res) => {
             active: null
         }
     };
+    
+    payload = {
+        title: 'new title',
+        description: 'new desc'
+    }
 
     /* UNABLE TO SUCCESSFULLY PATCH IN THE UPDATED VALUES TO THE ASSET. RECEIVING AN "INVALID JSON INPUT ERROR. SEE LINE 133*/
     pToken.then(value => {
         token = value;
         //Get most recent asset (and its id) from the doc stream
-        return apiRequest(`https://v2.api.uberflip.com/streams/${docStream}/items`, ['sort=-created_at', 'limit=1'], 'GET', token, 'application/json');
+        return apiRequest(`https://v2.api.uberflip.com/streams/${docStream}/items`, {sort : '-created_at', limit : 1}, 'GET', token, 'application/json');
     }).then( value => {
-        console.log(value);
+        //console.log(value);
         var id = value.data[0].id;
-        //console.log(payload);
-        return apiRequest(`https://v2.api.uberflip.com/items/${id}`, [], 'PATCH', token, 'application/json', JSON.stringify(payload));
+        return apiRequest(`https://v2.api.uberflip.com/items/${id}`, {}, 'PATCH', token, 'application/json', "", "", escapeString(JSON.stringify(payload)));
     }).then( value => {
         console.log(value);
         res.send("Updated");
@@ -148,29 +157,21 @@ app.listen(3000, () => { console.log("I am listening") });
 
 //---------------------------------------------------------
 
-function apiRequest(endpoint, params, method, token, type, formData, filePath, callback) {
+function apiRequest(endpoint, params, method, token, type, formData, filePath, body, callback) {
     return new Promise((resolve, reject) => {
-        if (filePath) {
-            formData['File'] = fs.createReadStream(filePath);
-        }
-        var pms = "?";
-        params.forEach( param => {
-            pms = pms + param + "&";
-        });
-        var requestURL = endpoint + pms;
         var options = {
-            'method': method,
-            'url': requestURL,
-            'headers': {
-                Authorization: 'Bearer ' + token
+            method: method,
+            url: endpoint,
+            headers: {
+                Authorization: 'Bearer ' + token,
+                'Content-Type': type
             },
-            'contentType': type,
-            'formData': formData
+            qs: params
         }
-        //console.log(requestURL);
-        //console.log(formData);
+        formData ? options.formData = formData : null;
+        filePath ? formData['File'] = fs.createReadStream(filePath) : null;
+        body ? options.body = body : null;
         request(options, function callback(err, httpResponse, body) {
-           //console.log(body);
             resolve(JSON.parse(body));
         });
     })
@@ -195,4 +196,10 @@ function getLegacyCreds() {
     var legacyApiKey = keys.LEGACY_KEY;
     var legacySig = keys.LEGACY_SIG;
     return [legacyApiKey, legacySig];
+}
+
+//---------------------------------------------------------
+
+function escapeString(str) {
+    return str.split('\"').join('\\\"');
 }
