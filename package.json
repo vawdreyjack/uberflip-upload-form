@@ -21,15 +21,19 @@
   },
   "homepage": "https://github.com/vawdreyjack/uberflip-upload-form#readme",
   "dependencies": {
+    "axios": "^0.19.0",
     "body-parser": "^1.19.0",
     "ejs": "^2.6.2",
     "express": "^4.17.1",
     "form-data": "^2.4.0",
     "formidable": "^1.2.1",
     "fs": "0.0.1-security",
+    "log-that-http": "^1.0.1",
+    "morgan": "^1.9.1",
     "open": "^6.4.0",
     "path": "^0.12.7",
-    "request": "^2.88.0"
+    "request": "^2.88.0",
+    "request-promise-native": "^1.0.7"
   },
   "devDependencies": {
     "gulp": "^4.0.2"
