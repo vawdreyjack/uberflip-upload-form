@@ -203,3 +203,8 @@ function getLegacyCreds() {
 function escapeString(str) {
     return str.split('\"').join('\\\"');
 }
+
+//Making some serious changes here
+function fakeFunction() {
+    return "so fake";
+}
